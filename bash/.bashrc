@@ -126,13 +126,17 @@ fi
 eval "$(starship init bash)"
 
 export PATH="/home/itag001464/.cargo/bin:$PATH"
-
 eval "$(zellij setup --generate-auto-start bash)"
-
 #activate zoxide
 eval "$(zoxide init bash)"
 
 # Set up fzf key bindings and fuzzy completion
-eval "$(fzf --bash)"
+#eval "$(fzf --bash)"
+# Fzf setup
+source ~/.key-bindings.bash
+source ~/.completion.bash
+export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
 
+
+export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 

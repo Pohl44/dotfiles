@@ -2,7 +2,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
 # Inserts a blank line between shell prompts
-add_newline = true
+add_newline = false
 
 # Replace the '❯' symbol in the prompt with '➜'
 [character] # The name of the module we are configuring is 'character'
@@ -10,4 +10,34 @@ success_symbol = '[➜](bold green)' # The 'success_symbol' segment is being set
 
 # Disable the package module, hiding it from the prompt completely
 [package]
+disabled = true
+
+[container]
+disabled = true
+
+[kubernetes]
+disabled = false
+format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in [$cluster](blue) in '
+#format = 'on [⛵ ($user on )($cluster in )$context \($namespace\)] in '
+symbol = '⛵'
+style = 'red'
+# Hier definieren wir, wie der Clustername dargestellt wird:
+
+
+[[kubernetes.contexts]]
+context_pattern = "vik8scplt914s"
+style = "green"
+context_alias = "TimCluster"
+
+[[kubernetes.contexts]]
+context_pattern = '^vik8sc(?P<short_context>.*)$'
+context_alias = "$short_context"
+#user_pattern = "admin"
+#style = "bold red"
+#user_alias = "admin"
+
+[shell]
+disabled = false
+
+[time]
 disabled = true
