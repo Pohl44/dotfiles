@@ -17,10 +17,11 @@ disabled = true
 
 [kubernetes]
 disabled = false
-format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in [$cluster](blue) in '
+format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in '
 #format = 'on [⛵ ($user on )($cluster in )$context \($namespace\)] in '
+#format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in [$cluster](blue) in '
 symbol = '⛵'
-style = 'red'
+style = 'blue'
 # Hier definieren wir, wie der Clustername dargestellt wird:
 
 
