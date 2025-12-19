@@ -8,6 +8,10 @@ case $- in
       *) return;;
 esac
 
+# --- mise activation (robust) ---
+if command -v mise >/dev/null 2>&1; then
+  eval "$(/home/itag001464/.local/bin/mise activate bash)" || true
+fi
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
 HISTCONTROL=ignoreboth
@@ -93,10 +97,14 @@ alias ll='lsd -alF'
 alias la='lsd -A'
 # alias l='lsd -CF'
 alias k='kubectl'
-complete -F __start_kubectl k
+if command -v kubectl >/dev/null 2>&1; then
+    source <(kubectl completion bash)
+    complete -o default -F __start_kubectl k
+fi
+
 alias get-config='~/sonstiges/startup_fetch.sh'
 
-alias cat='batcat'
+alias cat='bat'
 alias cls='clear'
 
 # Add an "alert" alias for long running commands.  Use like so:
@@ -126,11 +134,16 @@ fi
 #starship init
 eval "$(starship init bash)"
 
-export PATH="/home/itag001464/.cargo/bin:$PATH"
-eval "$(zellij setup --generate-auto-start bash)"
 #activate zoxide
 eval "$(zoxide init bash)"
 
+#eval "$(zellij setup --generate-auto-start bash)"
+# Zellij automatisch starten oder attachen
+if command -v zellij &> /dev/null && [ -z "$ZELLIJ" ] && [ -z "$TMUX" ]; then
+  zellij attach casdev
+fi
+
+export TASK_X_REMOTE_TASKFILES=1
 # Set up fzf key bindings and fuzzy completion
 #eval "$(fzf --bash)"
 # Fzf setup
