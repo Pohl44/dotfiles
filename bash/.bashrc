@@ -1,4 +1,4 @@
-# ~/.bashrc: executed by bash(1) for non-login shells.
+# ~/.bashrc: executed by bash(1) for non-login shells
 # see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
 # for examples
 
@@ -11,6 +11,11 @@ esac
 # --- mise activation (robust) ---
 if command -v mise >/dev/null 2>&1; then
   eval "$(/home/itag001464/.local/bin/mise activate bash)" || true
+fi
+
+# --- direnv hook ---
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook bash)"
 fi
 # don't put duplicate lines or lines starting with space in the history.
 # See bash(1) for more options
@@ -102,7 +107,17 @@ if command -v kubectl >/dev/null 2>&1; then
     complete -o default -F __start_kubectl k
 fi
 
-alias get-config='~/sonstiges/startup_fetch.sh'
+alias ctx='kubie ctx'
+
+alias ga='git add .'
+alias gc='git commit -m'
+alias gac='ga && gc'
+alias gl='git log --pretty=format:"%C(yellow)%h\\ %ad%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --date=short'
+alias gs='git status'
+alias gsw='git switch'
+
+alias vi='nvim'
+alias vim='vi'
 
 alias cat='bat'
 alias cls='clear'
@@ -110,15 +125,6 @@ alias cls='clear'
 # Add an "alert" alias for long running commands.  Use like so:
 #   sleep 10; alert
 alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
-
-# Alias definitions.
-# You may want to put all your additions into a separate file like
-# ~/.bash_aliases, instead of adding them here directly.
-# See /usr/share/doc/bash-doc/examples in the bash-doc package.
-
-if [ -f ~/.bash_aliases ]; then
-    . ~/.bash_aliases
-fi
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
@@ -137,7 +143,6 @@ eval "$(starship init bash)"
 #activate zoxide
 eval "$(zoxide init bash)"
 
-#eval "$(zellij setup --generate-auto-start bash)"
 # Zellij automatisch starten oder attachen
 if command -v zellij &> /dev/null && [ -z "$ZELLIJ" ] && [ -z "$TMUX" ]; then
   zellij attach casdev
@@ -150,7 +155,4 @@ export TASK_X_REMOTE_TASKFILES=1
 source ~/.key-bindings.bash
 source ~/.completion.bash
 export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
-
-
-export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 
