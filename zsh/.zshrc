@@ -12,16 +12,29 @@ autoload -Uz compinit
 compinit
 # End of lines added by compinstall
 #
+
+# --- mise activation (robust) ---
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)" || true
+fi
+
+# --- direnv hook ---
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi
+
 alias ll='lsd -alF'
 alias la='lsd -A'
 alias k='kubectl'
-complete -F __start_kubectl k
-alias cat='batcat'
+if command -v kubectl >/dev/null 2>&1; then
+    source <(kubectl completion zsh)
+    compdef _kubectl k
+fi
+alias cat='bat'
 alias cls='clear'
 
-eval "$(starship init zsh)
+eval "$(starship init zsh)"
 
 eval "$(zoxide init zsh)"
 
 eval "$(fzf --zsh)"
-export PATH="$PATH:/opt/nvim-linux-x86_64/bin
