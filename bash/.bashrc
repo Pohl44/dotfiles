@@ -104,8 +104,9 @@ fi
 
 alias get-config='~/sonstiges/startup_fetch.sh'
 
-alias cat='bat'
+alias cat='batcat'
 alias cls='clear'
+alias fc='fzf --preview "batcat --color=always {}"'
 
 # Add an "alert" alias for long running commands.  Use like so:
 #   sleep 10; alert
@@ -140,17 +141,19 @@ eval "$(zoxide init bash)"
 #eval "$(zellij setup --generate-auto-start bash)"
 # Zellij automatisch starten oder attachen
 if command -v zellij &> /dev/null && [ -z "$ZELLIJ" ] && [ -z "$TMUX" ]; then
-  zellij attach casdev
+  zellij attach -c kitty
 fi
 
 export TASK_X_REMOTE_TASKFILES=1
 # Set up fzf key bindings and fuzzy completion
-#eval "$(fzf --bash)"
+eval "$(fzf init bash)"
 # Fzf setup
-source ~/.key-bindings.bash
-source ~/.completion.bash
+#source ~/.key-bindings.bash
+#source ~/.completion.bash
 export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
 
 
 export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash

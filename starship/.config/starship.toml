@@ -10,15 +10,15 @@ success_symbol = '[➜](bold green)' # The 'success_symbol' segment is being set
 
 # Disable the package module, hiding it from the prompt completely
 [package]
-disabled = true
+disabled = false
 
 [container]
-disabled = true
+disabled = false
 
 [kubernetes]
 disabled = false
-format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in '
-#format = 'on [⛵ ($user on )($cluster in )$context \($namespace\)] in '
+#format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in '
+#format = ' [($user) in '
 #format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in [$cluster](blue) in '
 symbol = '⛵'
 style = 'blue'
@@ -36,11 +36,11 @@ context_alias = "$short_context"
 #user_pattern = "admin"
 #style = "bold red"
 #user_alias = "admin"
-#[username]
-#format = "[$user]($style)@"
+[username]
+format = "[$user]($style)@"
 
-#[hostname]
-#format = "[$hostname]($style) in "
+[hostname]
+format = "[$hostname]($style) in "
 #$ssh_symbol
 [shell]
 disabled = false
