@@ -2,6 +2,7 @@
 bat = "latest"
 btop = "latest"
 fzf = "latest"
+herdr = "latest"
 kubectl = "latest"
 lsd = "latest"
 node = "latest"
