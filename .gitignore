@@ -1,2 +1,3 @@
 zellij/.config/zellij/*.bak
 zellij/.config/zellij/*.bak.*
+kitty/.config/kitty/*.bak
