@@ -1,29 +1,30 @@
 # Get editor completions based on the config schema
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Inserts a blank line between shell prompts
+# Keine Leerzeile zwischen den Prompts
 add_newline = false
 
-# Replace the '❯' symbol in the prompt with '➜'
-[character] # The name of the module we are configuring is 'character'
-success_symbol = '[➜](bold green)' # The 'success_symbol' segment is being set to '➜' with the color 'bold green'
+# Prompt-Symbol: grüner Pfeil bei Erfolg, roter Pfeil nach einem Fehler
+[character]
+success_symbol = '[➜](bold green)'
+error_symbol = '[➜](bold red)'
 
-# Disable the package module, hiding it from the prompt completely
+# Paketversion anzeigen (package.json, Cargo.toml, …)
 [package]
 disabled = false
 
+# Anzeigen, wenn die Shell in einem Container läuft
 [container]
 disabled = false
 
+# Kubernetes-Kontext (nur sichtbar, wenn eine kubeconfig existiert)
 [kubernetes]
 disabled = false
 #format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in '
-#format = ' [($user) in '
 #format = '[$symbol ($context)]($style) [\(ns=$namespace\)](red) in [$cluster](blue) in '
+format = ' [$symbol$context( \($namespace\))]($style)'
 symbol = '⛵'
 style = 'blue'
-# Hier definieren wir, wie der Clustername dargestellt wird:
-
 
 [[kubernetes.contexts]]
 context_pattern = "vik8scplt914s"
@@ -36,14 +37,21 @@ context_alias = "$short_context"
 #user_pattern = "admin"
 #style = "bold red"
 #user_alias = "admin"
+
+# Benutzer immer vorne anzeigen; Hostname nur per SSH  →  "tim in ~"  bzw.  "tim@server in ~"
 [username]
-format = "[$user]($style)@"
+show_always = true
+format = "[$user]($style)"
 
 [hostname]
-format = "[$hostname]($style) in "
-#$ssh_symbol
+format = "[@$hostname]($style)"
+
+[directory]
+format = " in [$path]($style)[$read_only]($read_only_style) "
+
+# Shell-Anzeige ("bsh") aus
 [shell]
-disabled = false
+disabled = true
 
 [time]
 disabled = true
