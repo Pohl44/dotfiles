@@ -48,6 +48,19 @@ format = "[@$hostname]($style)"
 
 [directory]
 format = " in [$path]($style)[$read_only]($read_only_style) "
+truncation_symbol = "…/"   # zeigt an, dass vorne Ordner abgeschnitten sind
+
+# Exit-Code nach einem Fehler, z.B. "✗127"
+[status]
+disabled = false
+symbol = "✗"
+format = "[$symbol$status]($style) "
+
+# Hinweis, solange sudo ohne Passwort-Abfrage aktiv ist
+[sudo]
+disabled = false
+symbol = "🔓 "
+format = "[as $symbol]($style)"
 
 # Shell-Anzeige ("bsh") aus
 [shell]
