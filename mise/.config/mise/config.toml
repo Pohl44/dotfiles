@@ -1,0 +1,13 @@
+[tools]
+bat = "latest"
+btop = "latest"
+fzf = "latest"
+kubectl = "latest"
+lsd = "latest"
+node = "latest"
+npm = "latest"
+"pipx:spotdl" = "latest"
+ripgrep = "latest"
+starship = "latest"
+uv = "latest"
+zoxide = "latest"
