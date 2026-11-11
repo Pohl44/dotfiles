@@ -68,7 +68,8 @@ export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
 command -v fzf >/dev/null 2>&1 && eval "$(fzf --bash)"
 
 # --- lv: „ls -la visuell“ – eigenes Repo github.com/Pohl44/lv (~/lv, eingerichtet mit ~/lv/install.sh) ---
-#   lv [ordner] · Alt+L lv hier · Alt+K lv im Git-Wurzelordner · in herdr: Strg+B, F als Popup · in lv: ? / Alt+P
+#   lv [ordner] · Alt+Ö lv hier (in herdr als Popup) · Alt+Umschalt+Ö im Git-Wurzelordner · in lv: ? / Alt+P
+#   Alle Tasten im Überblick: ~/dotfiles/herdr/KEYS.md
 if [ -r ~/.local/share/lv/app/lv.bash ]; then
   . ~/.local/share/lv/app/lv.bash
   [ -r ~/.local/share/lv/app/integrations/bash-keys.bash ] && . ~/.local/share/lv/app/integrations/bash-keys.bash

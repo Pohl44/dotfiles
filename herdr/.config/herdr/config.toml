@@ -15,39 +15,114 @@ delivery = "terminal"
 [ui.sound]
 enabled = false
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  TASTEN – Übersicht in ~/dotfiles/herdr/KEYS.md, in herdr: Strg+B dann ß (oder ?)
+#
+#  Ebenen (jeder Modifikator gehört genau einer Ebene):
+#    Super            Desktop (Cinnamon)
+#    Strg+Umschalt    Terminal (kitty)
+#    Alt              herdr direkt: bewegen, teilen, ansehen – nichts Zerstörendes
+#    Strg+B, Taste    herdr komplett (Prefix). Rechte Strg antippen = Strg+B (xcape).
+#                     Strg darf nach Strg+B gedrückt bleiben (prefix+ctrl+<taste>).
+#    Rest             gehört den Programmen im Bereich
+#
+#  Regeln der Alt-Ebene:
+#    • Umschalt = eine Ebene höher:  Alt+H/J/K/L Bereich · Alt+Umschalt+H/L Tab
+#      · Alt+Umschalt+J/K Workspace.  Die Pfeiltasten tun jeweils dasselbe.
+#    • Frei bleiben für Claude Code und die Shell: Alt+B F D Y . P T O C und Alt+Rück.
+#    • Schließen, Umbenennen, Abmelden, Einstellungen: nur über den Prefix.
+#  Prefix-Ebene = herdr-Standard plus Ergänzungen, damit die herdr-Doku weiter stimmt.
+# ══════════════════════════════════════════════════════════════════════════════
 [keys]
-# Strg darf nach Ctrl+B gedrückt bleiben: jede Prefix-Aktion zusätzlich mit ctrl+<taste>
-settings = ["prefix+s", "prefix+ctrl+s"]
-detach = ["prefix+q", "prefix+ctrl+q"]
-open_notification_target = ["prefix+o", "prefix+ctrl+o"]
-workspace_picker = ["prefix+w", "prefix+ctrl+w"]
-goto = ["prefix+g", "prefix+ctrl+g"]
-new_tab = ["prefix+c", "prefix+ctrl+c"]
-previous_tab = ["prefix+p", "prefix+ctrl+p"]
-next_tab = ["prefix+n", "prefix+ctrl+n"]
-edit_scrollback = ["prefix+e", "prefix+ctrl+e"]
-focus_pane_left = ["prefix+h", "prefix+ctrl+h"]
-focus_pane_down = ["prefix+j", "prefix+ctrl+j"]
-focus_pane_up = ["prefix+k", "prefix+ctrl+k"]
-focus_pane_right = ["prefix+l", "prefix+ctrl+l"]
-split_vertical = ["prefix+v", "prefix+ctrl+v"]
-split_horizontal = ["prefix+minus", "prefix+ctrl+minus"]
-close_pane = ["prefix+x", "prefix+ctrl+x"]
-zoom = ["prefix+z", "prefix+ctrl+z"]
-resize_mode = ["prefix+r", "prefix+ctrl+r"]
+prefix = "ctrl+b"
 
-# lv (Dateimanager, Repo ~/lv) als Popup über dem aktuellen Bereich: Strg+B, F
-# Startet im Ordner des Bereichs; Esc beendet und wechselt den Bereich in den zuletzt geöffneten Ordner.
+# ── Hilfe und Sitzung ────────────────────────────────────────────────────────
+help          = ["prefix+?", "prefix+ß", "prefix+f1"]          # ß = ? ohne Umschalt
+settings      = ["prefix+s", "prefix+ctrl+s"]
+reload_config = "prefix+shift+r"
+detach        = ["prefix+q", "prefix+ctrl+q"]
+
+# ── Springen ─────────────────────────────────────────────────────────────────
+goto             = ["prefix+g", "prefix+ctrl+g", "alt+g"]      # Gehe zu … (alle Bereiche/Agenten, / sucht)
+workspace_picker = ["prefix+w", "prefix+ctrl+w", "alt+w"]      # Navigate-Modus: Prefix-Tasten ohne Prefix
+last_pane        = ["prefix+a", "prefix+ctrl+a", "alt+a"]      # hin und her zum zuletzt benutzten Bereich
+open_notification_target = ["prefix+o", "prefix+ctrl+o"]       # wirkt nur bei herdr-eigenen Meldungen
+
+# ── Bereiche ─────────────────────────────────────────────────────────────────
+focus_pane_left  = ["prefix+h", "prefix+ctrl+h", "prefix+left",  "alt+h", "alt+left"]
+focus_pane_down  = ["prefix+j", "prefix+ctrl+j", "prefix+down",  "alt+j", "alt+down"]
+focus_pane_up    = ["prefix+k", "prefix+ctrl+k", "prefix+up",    "alt+k", "alt+up"]
+focus_pane_right = ["prefix+l", "prefix+ctrl+l", "prefix+right", "alt+l", "alt+right"]
+swap_pane_left   = "prefix+shift+h"
+swap_pane_down   = "prefix+shift+j"
+swap_pane_up     = "prefix+shift+k"
+swap_pane_right  = "prefix+shift+l"
+cycle_pane_next     = "prefix+tab"
+cycle_pane_previous = "prefix+shift+tab"
+split_vertical   = ["prefix+v", "prefix+ctrl+v", "alt+v"]          # nebeneinander
+split_horizontal = ["prefix+minus", "prefix+ctrl+minus", "alt+minus"]  # übereinander
+zoom             = ["prefix+z", "prefix+ctrl+z", "alt+z"]
+resize_mode      = ["prefix+r", "prefix+ctrl+r", "alt+r"]          # dann H/J/K/L oder Pfeile, Enter beendet
+rename_pane      = "prefix+shift+p"
+clear_pane       = "prefix+backspace"
+close_pane       = ["prefix+x", "prefix+ctrl+x"]
+
+# ── Verlauf eines Bereichs ───────────────────────────────────────────────────
+edit_scrollback = ["prefix+e", "prefix+ctrl+e", "alt+e"]           # Ausgabe in Neovim öffnen
+copy_mode       = ["prefix+[", "prefix+ü", "alt+ü"]                # ü liegt dort, wo auf US-Tastaturen [ ist
+
+# ── Tabs ─────────────────────────────────────────────────────────────────────
+new_tab      = ["prefix+c", "prefix+ctrl+c", "prefix+plus", "alt+plus"]
+switch_tab   = ["prefix+1..9", "alt+1..9"]
+previous_tab = ["prefix+p", "prefix+ctrl+p", "alt+shift+h", "alt+shift+left"]
+next_tab     = ["prefix+n", "prefix+ctrl+n", "alt+shift+l", "alt+shift+right"]
+move_tab_previous = "prefix+<"                                     # Tab nach vorn schieben
+move_tab_next     = "prefix+>"                                     # Tab nach hinten schieben
+rename_tab   = "prefix+shift+t"
+close_tab    = "prefix+shift+x"
+
+# ── Agenten ──────────────────────────────────────────────────────────────────
+next_agent     = ["prefix+ä", "alt+ä"]                             # ä wie Agent
+previous_agent = ["prefix+shift+ä", "alt+shift+ä"]
+focus_agent    = "prefix+alt+1..9"
+
+# ── Workspaces ───────────────────────────────────────────────────────────────
+next_workspace     = ["prefix+period", "alt+shift+j", "alt+shift+down"]
+previous_workspace = ["prefix+comma",  "alt+shift+k", "alt+shift+up"]
+switch_workspace   = "prefix+shift+1..9"
+new_workspace      = "prefix+shift+n"
+rename_workspace   = "prefix+shift+w"
+close_workspace    = "prefix+shift+d"
+new_worktree       = "prefix+shift+g"
+open_worktree      = "prefix+shift+o"
+# remove_worktree bleibt ohne Taste (löscht einen Checkout; über das Rechtsklick-Menü erreichbar)
+
+toggle_sidebar = "prefix+b"
+
+# ── Eigene Befehle (Popups liegen über dem Bereich und ändern das Layout nicht) ──
+# lv – Dateimanager (Repo ~/lv). Startet im Ordner des Bereichs; Esc wechselt den Bereich in den letzten Ordner.
 [[keys.command]]
-key = "prefix+f"
+key = ["prefix+f", "prefix+ctrl+f", "alt+ö"]
 type = "popup"
 command = "/home/tim/.local/bin/lv-popup"
+description = "Dateien (lv)"
 width = "94%"
 height = "92%"
 
+# Shell für einen schnellen Befehl, im Ordner des Bereichs. Schließt sich mit exit oder Strg+D.
 [[keys.command]]
-key = "prefix+ctrl+f"
+key = ["prefix+enter", "alt+s"]
 type = "popup"
-command = "/home/tim/.local/bin/lv-popup"
-width = "94%"
-height = "92%"
+command = 'cd "${HERDR_ACTIVE_PANE_CWD:-$HOME}" 2>/dev/null; exec "${SHELL:-/bin/bash}"'
+description = "Shell-Popup"
+width = "80%"
+height = "70%"
+
+# Systemmonitor
+[[keys.command]]
+key = ["prefix+t", "prefix+ctrl+t"]
+type = "popup"
+command = "/home/tim/.local/share/mise/shims/btop"
+description = "Systemmonitor (btop)"
+width = "90%"
+height = "90%"
