@@ -63,6 +63,44 @@ fi
 export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
 command -v fzf >/dev/null 2>&1 && eval "$(fzf --bash)"
 
+# --- lv: „ls -la visuell“ – ls -la im Vollbild, mit Pfeiltasten durch die Zeilen ---
+#   ↑↓ Zeile wählen · Enter/→ Ordner öffnen bzw. Datei öffnen · ← eine Ebene hoch
+#   Strg+/ Vorschau an/aus · Tippen filtert · Esc beendet (Shell bleibt im letzten Ordner)
+lv() {
+  local dir out key name target
+  dir=$(cd -- "${1:-.}" && pwd) || return
+  while :; do
+    # Spalte 1: farbige ls -la-Zeile (angezeigt), Spalte 2: exakter Dateiname (unsichtbar, für Aktionen)
+    out=$(cd -- "$dir" && paste \
+            <(command ls -la --color=always --group-directories-first | tail -n +2) \
+            <(command ls -a1 --group-directories-first --quoting-style=literal) \
+      | fzf --ansi --delimiter=$'\t' --with-nth=1 --no-sort --reverse \
+            --margin=0 --padding=0 --border=none --info=inline-right \
+            --prompt="$dir/ " \
+            --header='Enter/→ öffnen · ← hoch · Strg+/ Vorschau · Esc beenden' \
+            --preview='f={2}; if [ -d "$f" ]; then ls -la --color=always --group-directories-first -- "$f"; else bat --color=always --style=numbers --paging=never -- "$f" 2>/dev/null || file -- "$f"; fi' \
+            --preview-window='right,45%' --bind='ctrl-/:toggle-preview' \
+            --expect=left,right,esc) || break
+    key=$(head -n1 <<<"$out")
+    name=$(sed -n '2p' <<<"$out" | cut -d$'\t' -f2-)
+    case "$key" in
+      esc) break ;;
+      left) dir=$(dirname -- "$dir"); continue ;;
+    esac
+    { [ -z "$name" ] || [ "$name" = "." ]; } && continue
+    target="$dir/$name"
+    if [ -d "$target" ]; then
+      dir=$(cd -- "$target" && pwd) || continue
+    elif [ "$key" != "right" ] && [ -e "$target" ]; then
+      case "$(file -bL --mime-type -- "$target")" in
+        text/*|inode/x-empty|application/json|application/x-shellscript) "${EDITOR:-nano}" -- "$target" ;;
+        *) setsid -f xdg-open "$target" >/dev/null 2>&1 ;;
+      esac
+    fi
+  done
+  cd -- "$dir" || return
+}
+
 # --- Prompt + Navigation ---
 command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"
 command -v zoxide   >/dev/null 2>&1 && eval "$(zoxide init bash)"
