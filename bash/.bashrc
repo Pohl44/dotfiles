@@ -67,11 +67,12 @@ fi
 export FZF_DEFAULT_OPTS="--margin=5% --padding=2% --border"
 command -v fzf >/dev/null 2>&1 && eval "$(fzf --bash)"
 
-# --- lv: „ls -la visuell“ (eigene Datei lv.bash neben dieser .bashrc; in lv zeigt ? alle Tasten) ---
-_lv_file="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lv.bash"
-# shellcheck source=lv.bash
-[ -r "$_lv_file" ] && . "$_lv_file"
-unset _lv_file
+# --- lv: „ls -la visuell“ – eigenes Repo github.com/Pohl44/lv (~/lv, eingerichtet mit ~/lv/install.sh) ---
+#   lv [ordner] · Alt+L lv hier · Alt+K lv im Git-Wurzelordner · in herdr: Strg+B, F als Popup · in lv: ? / Alt+P
+if [ -r ~/.local/share/lv/app/lv.bash ]; then
+  . ~/.local/share/lv/app/lv.bash
+  [ -r ~/.local/share/lv/app/integrations/bash-keys.bash ] && . ~/.local/share/lv/app/integrations/bash-keys.bash
+fi
 
 # --- Prompt + Navigation ---
 command -v starship >/dev/null 2>&1 && eval "$(starship init bash)"

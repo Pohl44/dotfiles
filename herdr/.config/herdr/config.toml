@@ -10,4 +10,44 @@ window_title = "{workspace}"
 status_indicators = "symbols"
 
 [ui.toast]
-delivery = "herdr"
+delivery = "terminal"
+
+[ui.sound]
+enabled = false
+
+[keys]
+# Strg darf nach Ctrl+B gedrückt bleiben: jede Prefix-Aktion zusätzlich mit ctrl+<taste>
+settings = ["prefix+s", "prefix+ctrl+s"]
+detach = ["prefix+q", "prefix+ctrl+q"]
+open_notification_target = ["prefix+o", "prefix+ctrl+o"]
+workspace_picker = ["prefix+w", "prefix+ctrl+w"]
+goto = ["prefix+g", "prefix+ctrl+g"]
+new_tab = ["prefix+c", "prefix+ctrl+c"]
+previous_tab = ["prefix+p", "prefix+ctrl+p"]
+next_tab = ["prefix+n", "prefix+ctrl+n"]
+edit_scrollback = ["prefix+e", "prefix+ctrl+e"]
+focus_pane_left = ["prefix+h", "prefix+ctrl+h"]
+focus_pane_down = ["prefix+j", "prefix+ctrl+j"]
+focus_pane_up = ["prefix+k", "prefix+ctrl+k"]
+focus_pane_right = ["prefix+l", "prefix+ctrl+l"]
+split_vertical = ["prefix+v", "prefix+ctrl+v"]
+split_horizontal = ["prefix+minus", "prefix+ctrl+minus"]
+close_pane = ["prefix+x", "prefix+ctrl+x"]
+zoom = ["prefix+z", "prefix+ctrl+z"]
+resize_mode = ["prefix+r", "prefix+ctrl+r"]
+
+# lv (Dateimanager, Repo ~/lv) als Popup über dem aktuellen Bereich: Strg+B, F
+# Startet im Ordner des Bereichs; Esc beendet und wechselt den Bereich in den zuletzt geöffneten Ordner.
+[[keys.command]]
+key = "prefix+f"
+type = "popup"
+command = "/home/tim/.local/bin/lv-popup"
+width = "94%"
+height = "92%"
+
+[[keys.command]]
+key = "prefix+ctrl+f"
+type = "popup"
+command = "/home/tim/.local/bin/lv-popup"
+width = "94%"
+height = "92%"
