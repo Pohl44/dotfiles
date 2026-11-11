@@ -7,3 +7,7 @@ auto_switch = false
 [ui]
 # kitty-Tab zeigt nur den Workspace-Namen (Standard wäre "{hostname}: {workspace}")
 window_title = "{workspace}"
+status_indicators = "symbols"
+
+[ui.toast]
+delivery = "herdr"

@@ -1,0 +1,730 @@
+#!/usr/bin/env bash
+# lv-helper – Hilfsskript für lv (siehe ../lv.bash)
+# Liefert Liste, Vorschau und Aktionen für die fzf-Bindings von lv.
+# Aufruf: lv-helper <befehl> [argumente]   Zustand liegt in $LV_STATE (ein Ordner pro lv-Aufruf)
+#
+# Zustandsdateien in $LV_STATE:
+#   dir      aktueller Ordner (absolut)      hidden   1 = versteckte zeigen, 0 = nicht
+#   sort     name | size | time              pin      angeheftete Datei (absolut)
+#   want     Pfad, auf den der Cursor nach dem nächsten Laden soll ("//first" = erster Eintrag nach . und ..)
+#   wantpos  Position dazu (schreibt "list", liest "onload")
+#   msg      Meldung für die Fußzeile (wird beim Anzeigen verbraucht)
+#   ablage   gemerkte Pfade (eine Zeile pro Pfad)   ablage_mode  copy | move
+#   nav      Marker: Ordner wurde gewechselt (nach execute-Aktionen)
+
+# shellcheck disable=SC2016  # $LV_HELPER soll erst in den fzf-Aktionen expandiert werden
+H='"$LV_HELPER"'
+S=${LV_STATE:-}
+export LV_HELPER=${LV_HELPER:-$(readlink -f -- "$0")}
+
+# Wiederkehrende fzf-Aktionsfolgen
+A_RELOAD="reload($H list)+transform-footer($H footer)"
+A_NAV="clear-query+clear-multi+first+reload($H list)+transform-prompt($H prompt)+transform-footer($H footer)"
+
+die() { printf 'lv-helper: %s\n' "$*" >&2; exit 1; }
+st() { cat -- "$S/$1" 2>/dev/null; }             # Zustand lesen
+set_st() { printf '%s\n' "$2" >"$S/$1"; }         # Zustand schreiben
+msg() { printf '%s' "$*" >"$S/msg"; }             # Meldung für die Fußzeile
+
+# ~ statt $HOME anzeigen
+tilde() {
+  case $1 in
+    "$HOME") printf '~' ;;
+    "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+# Einträge . und .. aus einer Pfadliste entfernen (Ergebnis im Array SEL)
+select_paths() {
+  SEL=()
+  local p
+  for p in "$@"; do
+    case ${p##*/} in .|..|'') ;; *) SEL+=("$p") ;; esac
+  done
+}
+
+# Bildschirm für Eingaben (innerhalb von execute)
+use_tty() { exec </dev/tty >/dev/tty 2>&1; }
+pause() { printf '\n%s' "${1:-Weiter mit beliebiger Taste …}"; read -r -s -n1 _; }
+
+# Editor starten (EDITOR darf Argumente enthalten, z. B. "code -w")
+editor() {
+  local ed=${EDITOR:-} cmd=()
+  if [ -z "$ed" ]; then
+    for ed in nvim nano vi; do command -v "$ed" >/dev/null 2>&1 && break; done
+  fi
+  read -r -a cmd <<<"$ed"
+  "${cmd[@]}" "$@" </dev/tty >/dev/tty
+}
+
+xdg() { setsid -f xdg-open "$1" >/dev/null 2>&1; }
+
+# Textdatei? (Mime-Typ text/*, leer, oder Zeichensatz nicht binär)
+is_text() {
+  local m
+  m=$(file -bL --mime -- "$1" 2>/dev/null) || return 1
+  case $m in
+    text/*|inode/x-empty*) return 0 ;;
+    *charset=binary*) return 1 ;;
+    *charset=*) return 0 ;;
+  esac
+  return 1
+}
+
+# In die Zwischenablage: $LV_CLIP (Testhaken) → CopyQ → xclip → xsel → wl-copy → OSC 52
+clip() {
+  local t=$1 copyq=$HOME/.local/share/mise/shims/copyq
+  if [ -n "${LV_CLIP:-}" ]; then
+    # shellcheck disable=SC2086  # LV_CLIP darf ein Befehl mit Argumenten sein
+    printf '%s' "$t" | $LV_CLIP >/dev/null 2>&1 && return 0
+  fi
+  if [ -x "$copyq" ] && "$copyq" copy "$t" >/dev/null 2>&1; then return 0; fi
+  if command -v xclip >/dev/null 2>&1; then printf '%s' "$t" | xclip -selection clipboard >/dev/null 2>&1 && return 0; fi
+  if command -v xsel >/dev/null 2>&1; then printf '%s' "$t" | xsel -ib >/dev/null 2>&1 && return 0; fi
+  if [ -n "${WAYLAND_DISPLAY:-}" ] && command -v wl-copy >/dev/null 2>&1; then printf '%s' "$t" | wl-copy && return 0; fi
+  # OSC 52: das Terminal (z. B. kitty) übernimmt den Text
+  printf '\033]52;c;%s\a' "$(printf '%s' "$t" | base64 -w0)" >/dev/tty 2>/dev/null
+}
+
+# ---------------------------------------------------------------- Liste
+
+# Ausgabe pro Eintrag: <ls-Spalten vor dem Namen> TAB <farbiger Name [-> Ziel]> TAB <absoluter Pfad>
+# Zwei ls-Läufe: --dired (ohne Farben) liefert die genauen Byte-Positionen der Namen,
+# der farbige Lauf liefert die Anzeige. So wird nur der Name durchsucht (fzf --nth=2).
+cmd_list() {
+  local dir opts=(-l --group-directories-first) want pfx
+  dir=$(st dir)
+  cd -- "$dir" 2>/dev/null || { printf '(Ordner nicht lesbar)\t\t\n'; return 0; }
+  [ "$(st hidden)" = 0 ] || opts+=(-a)
+  case $(st sort) in size) opts+=(-S) ;; time) opts+=(-t) ;; esac
+  want=$(st want)
+  rm -f -- "$S/want" "$S/wantpos"
+  pfx=$dir/
+  [ "$dir" = / ] && pfx=/
+  WANT=$want PFX=$pfx POSF=$S/wantpos LC_ALL=C awk '
+    FILENAME == ARGV[1] {
+      if (substr($0, 1, 10) == "//DIRED// ") { nb = split(substr($0, 11), b, " "); next }
+      if (substr($0, 1, 9) == "//DIRED-") next
+      start[++nl] = pos; line[nl] = $0; pos += length($0) + 1; next
+    }
+    FNR == 1 {
+      # Positionen der Namen auf die Zeilen verteilen
+      j = 1
+      for (k = 1; 2 * k <= nb; k++) {
+        beg = b[2 * k - 1]; end = b[2 * k]
+        while (j < nl && start[j + 1] <= beg) j++
+        off = beg - start[j]
+        plen[k] = off - 2                       # --dired rückt um 2 Leerzeichen ein
+        if (off + (end - beg) <= length(line[j])) name[k] = substr(line[j], off + 1, end - beg)
+        else bad[k] = 1                         # Zeilenumbruch im Namen: nicht darstellbar
+      }
+      next                                      # Zeile "insgesamt"/"total"
+    }
+    {
+      k = FNR - 1
+      if (bad[k] || !(k in plen)) next
+      pre = substr($0, 1, plen[k]); rest = substr($0, plen[k] + 1)
+      sub(/ $/, "", pre)                        # das Leerzeichen ersetzt der Tab (fzf --tabstop=1)
+      path = ENVIRON["PFX"] name[k]
+      print pre "\t" rest "\t" path
+      n++
+      if (!done && ENVIRON["WANT"] != "") {
+        if (path == ENVIRON["WANT"] || (ENVIRON["WANT"] == "//first" && name[k] != "." && name[k] != "..")) {
+          print n > ENVIRON["POSF"]; done = 1
+        }
+      }
+    }
+  ' <(command ls "${opts[@]}" --dired --quoting-style=literal --color=never 2>/dev/null) \
+    <(command ls "${opts[@]}" --quoting-style=literal --hide-control-chars --color=always 2>/dev/null)
+}
+
+# Nach dem Laden: Cursor auf den gewünschten Eintrag
+cmd_onload() {
+  local n
+  n=$(st wantpos)
+  rm -f -- "$S/wantpos"
+  [ -n "$n" ] && [ -z "${FZF_QUERY:-}" ] && echo "pos($n)"
+  return 0
+}
+
+cmd_prompt() {
+  local d
+  d=$(tilde "$(st dir)")
+  [ "$d" = / ] || d=$d/
+  printf '%s ' "$d"
+}
+
+cmd_footer() {
+  local s h out m n
+  case $(st sort) in size) s=Größe ;; time) s=Datum ;; *) s=Name ;; esac
+  [ "$(st hidden)" = 0 ] && h=aus || h=an
+  out=" ⇅ $s · versteckte: $h"
+  [ -n "$(st pin)" ] && out+=" · 📌 $(basename -- "$(st pin)")"
+  if [ -s "$S/ablage" ]; then
+    n=$(wc -l <"$S/ablage")
+    [ "$(st ablage_mode)" = move ] && m=verschieben || m=kopieren
+    out+=" · Ablage: $n zum ${m^} (Alt+V fügt ein)"
+  fi
+  if [ -s "$S/msg" ]; then
+    out+="  │ "$'\033[33m'"$(st msg)"$'\033[0m'
+    rm -f -- "$S/msg"
+  fi
+  printf '%s\n' "$out"
+}
+
+cmd_label() {
+  local p
+  p=$(st pin)
+  [ -n "$p" ] && printf ' 📌 %s ' "$(basename -- "$p")"
+  echo
+}
+
+# ---------------------------------------------------------------- Vorschau
+
+preview_image() {
+  local p=$1 w=${FZF_PREVIEW_COLUMNS:-80} h=${FZF_PREVIEW_LINES:-24} mode=${LV_IMAGES:-auto} rows
+  if [ "$mode" = auto ]; then
+    mode=none
+    command -v chafa >/dev/null 2>&1 && mode=chafa
+    # kitty-Grafik nur direkt in kitty (nicht in tmux/herdr), sonst erscheinen Platzhalterzeichen
+    if { [ -n "${KITTY_WINDOW_ID:-}" ] || [ "${TERM:-}" = xterm-kitty ]; } \
+        && [ -z "${TMUX:-}" ] && [ -z "${HERDR_ENV:-}" ] && command -v kitten >/dev/null 2>&1; then
+      mode=kitty
+    fi
+  fi
+  case $mode in
+    kitty)
+      # Liegt die Vorschau am unteren Rand, eine Zeile weniger, sonst scrollt das Terminal
+      rows=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f1)
+      if [ -n "$rows" ] && [ $(( ${FZF_PREVIEW_TOP:-0} + h )) -ge "$rows" ]; then h=$((h - 1)); fi
+      # icat endet ohne Zeilenumbruch: Reset + Zeilenumbruch anhängen (alle Bildzeilen bleiben erhalten)
+      kitten icat --clear --transfer-mode=memory --unicode-placeholder --stdin=no \
+        --place="${w}x${h}@0x0" -- "$p" 2>/dev/null || file -bL -- "$p"
+      printf '\033[m\n'
+      ;;
+    chafa) chafa -s "${w}x${h}" -- "$p" ;;
+    *) file -bL -- "$p"; echo; echo "(Bildvorschau nur in kitty oder mit chafa)" ;;
+  esac
+}
+
+show_text() {
+  local bat
+  bat=$(command -v bat || command -v batcat)
+  if [ -n "$bat" ]; then
+    "$bat" --color=always --style=numbers --paging=never --line-range=:3000 -- "$1"
+  else
+    head -n 3000 -- "$1"
+  fi
+}
+
+cmd_preview() {
+  local p=$1 m
+  [ -n "$p" ] || return 0
+  if [ -d "$p" ]; then
+    command ls -la --color=always --group-directories-first -- "$p" 2>&1
+    return 0
+  fi
+  if [ ! -e "$p" ]; then
+    if [ -L "$p" ]; then printf 'Defekter Link → %s\n' "$(readlink -- "$p")"; else printf 'Nicht vorhanden: %s\n' "$p"; fi
+    return 0
+  fi
+  if [ ! -r "$p" ]; then echo "Keine Leserechte."; file -b -- "$p"; return 0; fi
+  m=$(file -bL --mime-type -- "$p" 2>/dev/null)
+  case $m in
+    image/*) preview_image "$p" ;;
+    application/pdf)
+      if command -v pdftotext >/dev/null 2>&1; then
+        pdftotext -l 30 -layout -- "$p" - 2>/dev/null | head -n 2000
+      else
+        file -b -- "$p"
+      fi ;;
+    application/x-tar|application/gzip|application/x-gzip|application/x-bzip2|application/x-xz|application/zstd|application/x-lzma|application/x-lzip)
+      tar tvf "$p" 2>/dev/null | head -n 2000 || 7z l -- "$p" 2>&1 | head -n 2000 ;;
+    application/zip|application/x-7z-compressed|application/vnd.rar|application/x-rar*|application/java-archive|application/x-iso9660-image|application/vnd.debian.binary-package|application/x-rpm|application/x-cpio|application/vnd.ms-cab-compressed|application/x-archive)
+      7z l -- "$p" 2>&1 | head -n 2000 ;;
+    *)
+      if is_text "$p"; then show_text "$p"
+      else
+        file -bL -- "$p"
+        printf '\nGröße: %s\n' "$(du -h --apparent-size -- "$p" | cut -f1)"
+      fi ;;
+  esac
+  return 0
+}
+
+cmd_preview_pin() {
+  local p
+  p=$(st pin)
+  [ -n "$p" ] || { echo "(nichts angeheftet)"; return 0; }
+  cmd_preview "$p"
+}
+
+cmd_help() {
+  local b=$'\033[1;36m' r=$'\033[0m' d=$'\033[2m'
+  cat <<EOF
+${b}lv – ls -la visuell${r}   ${d}(Shift+↑/↓ oder Mausrad scrollt hier)${r}
+
+${b}Navigation${r}
+  ↑ ↓ Bild↑ Bild↓    Zeile wählen
+  Enter              Ordner öffnen · Text → Editor · sonst Standard-App
+  →                  Ordner öffnen
+  ← · Rücktaste¹     eine Ebene hoch
+  ~¹                 nach Hause
+  Alt+Z              Ordner per zoxide anspringen
+  Tippen             nach Namen filtern
+  Esc · Strg+C       beenden, die Shell bleibt im Ordner
+
+${b}Anheften${r}
+  Strg+P             markierte Datei rechts anheften / wieder lösen
+  Strg+O             markierte + angeheftete nebeneinander im Editor
+
+${b}Öffnen & Suchen${r}
+  Alt+O              mit der Standard-App öffnen (xdg-open)
+  Alt+G              Inhaltssuche mit rg, Enter öffnet an der Zeile
+  Alt+U              Größe (du -sh) der markierten Zeile
+  Alt+Y              Pfad(e) in die Zwischenablage
+
+${b}Dateien${r}
+  Tab · Shift+Tab    markieren (mehrere) · Alt+A alle umschalten
+  Alt+N · Alt+M      neue Datei · neuer Ordner
+  F2 · Alt+R         umbenennen
+  Entf¹ · Alt+Entf   in den Papierkorb (mit Rückfrage)
+  Alt+C · Alt+X      Markierte merken zum Kopieren · Verschieben
+  Alt+V              Gemerktes hier einfügen
+  F5 · F6            Markierte kopieren · verschieben nach … (Eingabe)
+
+${b}Ansicht${r}
+  Alt+H              versteckte Dateien ein/aus
+  Alt+S              sortieren: Name → Größe → Datum
+  Strg+/ · Alt+P     Vorschau rechts → unten → aus
+  Shift+↑↓ · Alt+Bild↑↓ Vorschau scrollen
+  Strg+R             neu laden
+  ? · F1             diese Hilfe
+
+${d}¹ nur bei leerer Suche, sonst normale Eingabe${r}
+EOF
+}
+
+# ---------------------------------------------------------------- Navigation
+
+# In Ordner wechseln; $2 = Eintrag, auf den der Cursor soll
+go() {
+  set_st dir "$1"
+  set_st want "${2:-//first}"
+  echo "$A_NAV"
+}
+
+cmd_up() {
+  local d
+  d=$(st dir)
+  [ "$d" = / ] && return 0
+  go "$(dirname -- "$d")" "$d"
+}
+
+cmd_enter() {
+  local p=$1 d
+  [ -n "$p" ] || return 0
+  case ${p##*/} in
+    .) return 0 ;;
+    ..) cmd_up; return 0 ;;
+  esac
+  if [ -d "$p" ]; then
+    d=$(cd -- "$p" 2>/dev/null && pwd) || { msg "Kein Zugriff: ${p##*/}"; echo "transform-footer($H footer)"; return 0; }
+    go "$d"
+  elif [ "$2" != right ] && { [ -e "$p" ] || [ -L "$p" ]; }; then
+    echo "execute($H open {s3..})+transform($H sync {s3..})"
+  elif [ "$2" = right ]; then
+    echo forward-char
+  fi
+}
+
+cmd_home() {
+  if [ -n "${FZF_QUERY:-}" ]; then echo 'put(~)'; else go "$HOME"; fi
+}
+
+cmd_qmark() {
+  if [ -n "${FZF_QUERY:-}" ]; then echo 'put(?)'; else echo "preview($H help)"; fi
+}
+
+cmd_delkey() {
+  if [ -n "${FZF_QUERY:-}" ]; then echo delete-char
+  else echo "execute($H trash {+s3..})+clear-multi+transform($H sync {s3..})"
+  fi
+}
+
+# Nach execute-Aktionen: Liste neu laden, Vorschau/Label/Fußzeile an den Zustand anpassen
+cmd_sync() {
+  local a p
+  if [ -f "$S/nav" ]; then
+    rm -f -- "$S/nav"
+    a=$A_NAV
+  else
+    [ -f "$S/want" ] || set_st want "$1"
+    a=$A_RELOAD
+  fi
+  p=$(st pin)
+  if [ -n "$p" ] && [ ! -e "$p" ] && [ ! -L "$p" ]; then
+    rm -f -- "$S/pin"; p=
+  fi
+  if [ -n "$p" ]; then a+="+change-preview($H preview-pin)"; else a+="+change-preview($H preview {s3..})"; fi
+  echo "$a+refresh-preview+transform-preview-label($H label)"
+}
+
+cmd_refresh() { set_st want "$1"; echo "$A_RELOAD+refresh-preview"; }
+
+# ---------------------------------------------------------------- Ansicht
+
+cmd_hidden() {
+  if [ "$(st hidden)" = 0 ]; then set_st hidden 1; else set_st hidden 0; fi
+  set_st want "$1"
+  echo "$A_RELOAD"
+}
+
+cmd_sort() {
+  case $(st sort) in
+    name) set_st sort size ;;
+    size) set_st sort time ;;
+    *) set_st sort name ;;
+  esac
+  set_st want "$1"
+  echo "$A_RELOAD"
+}
+
+# ---------------------------------------------------------------- Anheften
+
+cmd_pin() {
+  local p=$1
+  if [ -n "$(st pin)" ]; then
+    rm -f -- "$S/pin"
+    msg "Gelöst"
+    echo "change-preview($H preview {s3..})+refresh-preview+transform-preview-label($H label)+transform-footer($H footer)"
+    return 0
+  fi
+  [ -n "$p" ] || return 0
+  case ${p##*/} in .|..) return 0 ;; esac
+  set_st pin "$p"
+  msg "Angeheftet – Strg+O öffnet nebeneinander"
+  echo "show-preview+change-preview($H preview-pin)+refresh-preview+transform-preview-label($H label)+transform-footer($H footer)"
+}
+
+cmd_open() {
+  local p=$1
+  { [ -e "$p" ] || [ -L "$p" ]; } || return 0
+  if [ -d "$p" ]; then return 0; fi
+  if is_text "$p"; then editor -- "$p"; else xdg "$p"; fi
+}
+
+cmd_open2() {
+  local m=$1 p
+  [ -n "$m" ] || return 0
+  p=$(st pin)
+  if [ -z "$p" ]; then
+    msg "Nichts angeheftet – nur die markierte Datei geöffnet"
+    editor -- "$m"
+  else
+    editor -O -- "$m" "$p"
+  fi
+}
+
+cmd_xdg() {
+  select_paths "$@"
+  local p
+  for p in "${SEL[@]}"; do xdg "$p"; done
+}
+
+# ---------------------------------------------------------------- Dateiaktionen
+
+cmd_new() {
+  local kind=$1 dir name t
+  dir=$(st dir)
+  use_tty
+  if [ "$kind" = dir ]; then
+    read -e -r -p "Neuer Ordner in $(cmd_prompt)" name
+  else
+    read -e -r -p "Neue Datei in $(cmd_prompt)" name
+  fi
+  [ -n "$name" ] || return 0
+  t=$dir/$name
+  if [ -e "$t" ] || [ -L "$t" ]; then msg "Gibt es schon: $name"; set_st want "$t"; return 0; fi
+  if [ "$kind" = dir ]; then
+    mkdir -p -- "$t" || { pause; return 0; }
+  else
+    [[ $name == */* ]] && { mkdir -p -- "$(dirname -- "$t")" || { pause; return 0; }; }
+    : >"$t" || { pause; return 0; }
+  fi
+  msg "Angelegt: $name"
+  set_st want "$dir/${name%%/*}"
+}
+
+cmd_rename() {
+  local p=$1 b new t
+  b=${p##*/}
+  case $b in .|..|'') return 0 ;; esac
+  use_tty
+  read -e -r -i "$b" -p "Umbenennen: " new
+  { [ -n "$new" ] && [ "$new" != "$b" ]; } || return 0
+  if [[ $new == */* ]]; then msg "Kein / im Namen (zum Verschieben F6)"; return 0; fi
+  t=${p%/*}/$new
+  if [ -e "$t" ] || [ -L "$t" ]; then msg "Gibt es schon: $new"; return 0; fi
+  if mv -- "$p" "$t"; then
+    msg "Umbenannt: $b → $new"
+    set_st want "$t"
+    [ "$(st pin)" = "$p" ] && set_st pin "$t"
+  else
+    pause
+  fi
+}
+
+cmd_trash() {
+  select_paths "$@"
+  local n=${#SEL[@]} a p i=0
+  [ "$n" -gt 0 ] || return 0
+  use_tty
+  printf 'In den Papierkorb:\n'
+  for p in "${SEL[@]}"; do
+    i=$((i + 1))
+    if [ "$i" -gt 15 ]; then printf '  … und %d weitere\n' $((n - 15)); break; fi
+    printf '  %s\n' "${p##*/}"
+  done
+  read -r -n1 -p "$n Einträge in den Papierkorb verschieben? [j/N] " a
+  echo
+  case $a in
+    [jJyY])
+      if gio trash -- "${SEL[@]}"; then msg "$n in den Papierkorb verschoben"
+      else msg "Fehler beim Verschieben in den Papierkorb"; pause
+      fi ;;
+    *) msg "Abgebrochen" ;;
+  esac
+}
+
+# Kopieren/Verschieben: $1 = copy|move, $2 = Zielordner, Rest = Quellen; vorhandene Ziele werden übersprungen
+transfer() {
+  local mode=$1 dest=$2 src t ok=0 skip=0 fail=0 verb
+  shift 2
+  for src in "$@"; do
+    t=$dest/${src##*/}
+    if [ -e "$t" ] || [ -L "$t" ]; then skip=$((skip + 1)); continue; fi
+    if [ "$mode" = copy ]; then cp -a -- "$src" "$t"; else mv -- "$src" "$t"; fi \
+      && ok=$((ok + 1)) || fail=$((fail + 1))
+  done
+  [ "$mode" = copy ] && verb=kopiert || verb=verschoben
+  msg "$ok $verb$( [ "$skip" -gt 0 ] && printf ', %d übersprungen (gibt es schon)' "$skip")$( [ "$fail" -gt 0 ] && printf ', %d Fehler' "$fail")"
+  [ "$fail" -eq 0 ] || pause
+}
+
+cmd_ablage() {
+  local mode=$1 n
+  shift
+  select_paths "$@"
+  n=${#SEL[@]}
+  [ "$n" -gt 0 ] || return 0
+  printf '%s\n' "${SEL[@]}" >"$S/ablage"
+  set_st ablage_mode "$mode"
+  msg "$n gemerkt – Zielordner ansteuern, Alt+V fügt ein"
+  echo "clear-multi+transform-footer($H footer)"
+}
+
+cmd_paste() {
+  local mode list=()
+  [ -s "$S/ablage" ] || { msg "Ablage ist leer (erst Alt+C oder Alt+X)"; return 0; }
+  mode=$(st ablage_mode)
+  mapfile -t list <"$S/ablage"
+  use_tty
+  transfer "$mode" "$(st dir)" "${list[@]}"
+  [ "$mode" = move ] && rm -f -- "$S/ablage" "$S/ablage_mode"
+  [ "${#list[@]}" -gt 0 ] && set_st want "$(st dir)/${list[0]##*/}"
+}
+
+cmd_transfer_ask() {
+  local mode=$1 dest a
+  shift
+  select_paths "$@"
+  [ "${#SEL[@]}" -gt 0 ] || return 0
+  use_tty
+  if [ "$mode" = copy ]; then
+    read -e -r -i "$(st dir)/" -p "${#SEL[@]} kopieren nach: " dest
+  else
+    read -e -r -i "$(st dir)/" -p "${#SEL[@]} verschieben nach: " dest
+  fi
+  [ -n "$dest" ] || return 0
+  [[ $dest == \~ || $dest == \~/* ]] && dest=$HOME${dest#\~}
+  dest=${dest%/}
+  [ -n "$dest" ] || dest=/
+  if [ ! -d "$dest" ]; then
+    read -r -n1 -p "Ordner $dest anlegen? [j/N] " a
+    echo
+    case $a in [jJyY]) mkdir -p -- "$dest" || { pause; return 0; } ;; *) msg "Abgebrochen"; return 0 ;; esac
+  fi
+  transfer "$mode" "$dest" "${SEL[@]}"
+}
+
+cmd_clip() {
+  select_paths "$@"
+  [ "${#SEL[@]}" -gt 0 ] || return 0
+  if clip "$(printf '%s\n' "${SEL[@]}" | sed '$!b;s/\n$//')"; then
+    if [ "${#SEL[@]}" -eq 1 ]; then msg "Pfad kopiert: $(tilde "${SEL[0]}")"; else msg "${#SEL[@]} Pfade kopiert"; fi
+  else
+    msg "Zwischenablage nicht erreichbar"
+  fi
+  echo "transform-footer($H footer)"
+}
+
+cmd_du() {
+  local p=$1 s
+  [ -n "$p" ] || return 0
+  s=$(du -sh -- "$p" 2>/dev/null | cut -f1)
+  msg "Größe ${p##*/}: ${s:-?}"
+  cmd_footer
+}
+
+# ---------------------------------------------------------------- Suche & Sprung
+
+cmd_rg() {
+  [ -n "$1" ] || return 0
+  local opts=(--line-number --no-heading --color=always --smart-case --field-match-separator=$'\t')
+  [ "$(st hidden)" = 0 ] || opts+=(--hidden --glob '!.git')
+  # Pfad "." angeben, sonst durchsucht rg die Standardeingabe; ./ vorne abschneiden
+  rg "${opts[@]}" -- "$1" . </dev/null 2>/dev/null | sed 's|^\(\x1b\[[0-9;]*m\)*\./|\1|'
+  return 0
+}
+
+cmd_grep() {
+  cd -- "$(st dir)" || return 0
+  command -v rg >/dev/null 2>&1 || { msg "rg (ripgrep) fehlt"; return 0; }
+  use_tty
+  fzf --ansi --disabled --reverse --delimiter=$'\t' --with-shell='bash -c' \
+      --margin=0 --padding=0 --border=none --info=inline-right \
+      --prompt="rg $(cmd_prompt)" \
+      --header='Suchbegriff tippen · Enter öffnet an der Zeile · Esc zurück zu lv' \
+      --bind="change:reload:sleep 0.1; $H rg {q}" \
+      --bind="enter:execute($H edit-line {s1} {2})" \
+      --preview="$H preview-line {s1} {2}" \
+      --preview-window='right,50%,+{2}/2' </dev/null
+  return 0
+}
+
+cmd_edit_line() { editor "+$2" -- "$1"; }
+
+cmd_preview_line() {
+  local bat
+  bat=$(command -v bat || command -v batcat)
+  if [ -n "$bat" ]; then
+    "$bat" --color=always --style=numbers --paging=never --highlight-line "$2" -- "$1"
+  else
+    cat -n -- "$1"
+  fi
+}
+
+cmd_zjump() {
+  local sel
+  command -v zoxide >/dev/null 2>&1 || { msg "zoxide fehlt"; return 0; }
+  use_tty
+  sel=$(zoxide query -l 2>/dev/null | fzf --reverse --scheme=path --with-shell='bash -c' \
+          --margin=0 --padding=0 --border=none --info=inline-right \
+          --prompt='zoxide> ' --header='Ordner wählen · Enter springt hin · Esc zurück' \
+          --preview='ls -la --color=always --group-directories-first -- {}' \
+          --preview-window='right,50%')
+  if [ -n "$sel" ] && [ -d "$sel" ]; then
+    set_st dir "$sel"
+    set_st want //first
+    : >"$S/nav"
+  fi
+  return 0
+}
+
+# ---------------------------------------------------------------- Start
+
+HEADER='Enter öffnen · ← hoch · Strg+P anheften · Strg+O nebeneinander · ? Hilfe'
+
+cmd_run() {
+  local start=${1:-$PWD}
+  export LV_STATE=$S
+  set_st dir "$start"
+  set_st hidden 1
+  set_st sort name
+  set_st want //first
+  cmd_list | fzf \
+    --ansi --multi --no-sort --reverse \
+    --delimiter=$'\t' --with-nth=$'{1}\t{2}' --nth=2 --tabstop=1 \
+    --margin=0 --padding=0 --border=none --info=inline-right \
+    --with-shell='bash -c' \
+    --prompt="$(cmd_prompt)" --header="$HEADER" --footer="$(cmd_footer)" \
+    --preview="$H preview {s3..}" --preview-window='right,50%' \
+    --bind="load:transform($H onload)" \
+    --bind="enter:transform($H enter {s3..})" \
+    --bind="right:transform($H enter {s3..} right)" \
+    --bind="left:transform($H up)" \
+    --bind="backward-eof:transform($H up)" \
+    --bind="~:transform($H home)" \
+    --bind="alt-z:execute($H zjump)+transform($H sync {s3..})" \
+    --bind="ctrl-p:transform($H pin {s3..})" \
+    --bind="ctrl-o:execute($H open2 {s3..})+transform($H sync {s3..})" \
+    --bind="alt-o:execute-silent($H xdg {+s3..})" \
+    --bind="alt-g:execute($H grep)+transform($H sync {s3..})" \
+    --bind="alt-u:change-footer( ⏳ du läuft …)+bg-transform-footer($H du {s3..})" \
+    --bind="alt-y:transform($H clip {+s3..})" \
+    --bind="alt-a:toggle-all" \
+    --bind="alt-n:execute($H new file)+transform($H sync {s3..})" \
+    --bind="alt-m:execute($H new dir)+transform($H sync {s3..})" \
+    --bind="f2,alt-r:execute($H rename {s3..})+transform($H sync {s3..})" \
+    --bind="del:transform($H delkey)" \
+    --bind="alt-delete:execute($H trash {+s3..})+clear-multi+transform($H sync {s3..})" \
+    --bind="alt-c:transform($H ablage copy {+s3..})" \
+    --bind="alt-x:transform($H ablage move {+s3..})" \
+    --bind="alt-v:execute($H paste)+transform($H sync {s3..})" \
+    --bind="f5:execute($H transfer-ask copy {+s3..})+clear-multi+transform($H sync {s3..})" \
+    --bind="f6:execute($H transfer-ask move {+s3..})+clear-multi+transform($H sync {s3..})" \
+    --bind="alt-h:transform($H hidden {s3..})" \
+    --bind="alt-s:transform($H sort {s3..})" \
+    --bind="ctrl-/,alt-p:change-preview-window(down,50%|hidden|right,50%)" \
+    --bind="alt-page-up:preview-page-up,alt-page-down:preview-page-down" \
+    --bind="ctrl-r:transform($H refresh {s3..})" \
+    --bind="?:transform($H qmark)" \
+    --bind="f1:preview($H help)"
+  return 0
+}
+
+# ---------------------------------------------------------------- Verteiler
+
+[ -n "$S" ] && [ -d "$S" ] || die "LV_STATE ist kein Ordner (lv-helper wird von lv aufgerufen)"
+sub=${1:-}
+shift || true
+case $sub in
+  run) cmd_run "$@" ;;
+  list) cmd_list ;;
+  onload) cmd_onload ;;
+  prompt) cmd_prompt ;;
+  footer) cmd_footer ;;
+  label) cmd_label ;;
+  preview) cmd_preview "${1:-}" ;;
+  preview-pin) cmd_preview_pin ;;
+  preview-line) cmd_preview_line "$@" ;;
+  help) cmd_help ;;
+  up) cmd_up ;;
+  enter) cmd_enter "${1:-}" "${2:-}" ;;
+  home) cmd_home ;;
+  qmark) cmd_qmark ;;
+  delkey) cmd_delkey ;;
+  sync) cmd_sync "${1:-}" ;;
+  refresh) cmd_refresh "${1:-}" ;;
+  hidden) cmd_hidden "${1:-}" ;;
+  sort) cmd_sort "${1:-}" ;;
+  pin) cmd_pin "${1:-}" ;;
+  open) cmd_open "${1:-}" ;;
+  open2) cmd_open2 "${1:-}" ;;
+  xdg) cmd_xdg "$@" ;;
+  new) cmd_new "${1:-file}" ;;
+  rename) cmd_rename "${1:-}" ;;
+  trash) cmd_trash "$@" ;;
+  ablage) cmd_ablage "$@" ;;
+  paste) cmd_paste ;;
+  transfer-ask) cmd_transfer_ask "$@" ;;
+  clip) cmd_clip "$@" ;;
+  du) cmd_du "${1:-}" ;;
+  rg) cmd_rg "${1:-}" ;;
+  grep) cmd_grep ;;
+  edit-line) cmd_edit_line "$@" ;;
+  zjump) cmd_zjump ;;
+  *) die "unbekannter Befehl: $sub" ;;
+esac
