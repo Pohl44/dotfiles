@@ -268,193 +268,82 @@ def run(t):
     p0 = t.focused_pane()
     t.check("Start: 1 Workspace, 1 Tab, 1 Bereich", len(t.ws()) == 1 and len(t.tabs()) == 1 and len(t.panes()) == 1)
 
-    # ── Alt-Ebene: Bereiche ─────────────────────────────────────────────────
+    # ── Alt: Bereiche ───────────────────────────────────────────────────────
     h.keys("alt+v", wait=0.9)
     t.check("Alt+V teilt nebeneinander", len(t.panes()) == 2)
     p1 = t.focused_pane()
     h.keys("alt+h"); t.check("Alt+H Bereich links", t.focused_pane() == p0)
     h.keys("alt+l"); t.check("Alt+L Bereich rechts", t.focused_pane() == p1)
-    h.keys("alt+left"); t.check("Alt+← Bereich links", t.focused_pane() == p0)
-    h.keys("alt+right"); t.check("Alt+→ Bereich rechts", t.focused_pane() == p1)
     h.keys("alt+minus", wait=0.9)
     t.check("Alt+- teilt übereinander", len(t.panes()) == 3)
     p2 = t.focused_pane()
     h.keys("alt+k"); t.check("Alt+K Bereich oben", t.focused_pane() == p1)
     h.keys("alt+j"); t.check("Alt+J Bereich unten", t.focused_pane() == p2)
-    h.keys("alt+up"); t.check("Alt+↑ Bereich oben", t.focused_pane() == p1)
-    h.keys("alt+down"); t.check("Alt+↓ Bereich unten", t.focused_pane() == p2)
-    h.keys("alt+a"); t.check("Alt+A letzter Bereich (hin)", t.focused_pane() == p1)
-    h.keys("alt+a"); t.check("Alt+A letzter Bereich (her)", t.focused_pane() == p2)
     h.keys("alt+z"); t.check("Alt+Z Zoom an", t.layout().get("zoomed") is True)
     h.keys("alt+z"); t.check("Alt+Z Zoom aus", t.layout().get("zoomed") is False)
-
-    # Resize-Modus
-    w_before = t.rect(p0)["width"]
-    h.keys("alt+h")
-    h.take(); h.key("alt+r")
-    t.check("Alt+R Resize-Modus", "RESIZE" in h.text_since())
-    h.keys("l", "l", "l", "enter", wait=0.6)
-    t.check("Resize: L verbreitert, Enter beendet", t.rect(p0)["width"] > w_before, f"{w_before} -> {t.rect(p0)['width']}")
-
-    # Copy-Modus
     h.take(); h.key("alt+ü")
     t.check("Alt+Ü Copy-Modus", "COPY" in h.text_since())
     h.keys("q")
-    h.take(); h.keys("ctrl+b", "ü", wait=0.1)
-    t.check("Prefix Ü Copy-Modus", "COPY" in h.text_since())
-    h.keys("q")
 
-    # ── Prefix-Ebene: Bereiche ──────────────────────────────────────────────
+    # ── Prefix (herdr-Standard) ─────────────────────────────────────────────
+    h.take(); h.key("ctrl+b")
+    t.check("Strg+B zeigt PREFIX", "PREFIX" in h.text_since())
+    h.keys("esc")
+    h.keys("ctrl+b", "h"); t.check("Prefix H Bereich links", t.focused_pane() == p0)
     h.keys("ctrl+b", "l"); t.check("Prefix L Bereich rechts", t.focused_pane() in (p1, p2))
-    h.keys("ctrl+b", "ctrl+h"); t.check("Prefix Strg+H (Strg gehalten) Bereich links", t.focused_pane() == p0)
-    h.keys("ctrl+b", "right"); t.check("Prefix → Bereich rechts", t.focused_pane() in (p1, p2))
-    h.keys("ctrl+b", "ctrl+j"); h.keys("ctrl+b", "ctrl+k")
-    t.check("Prefix Strg+J / Strg+K (Strg gehalten)", t.focused_pane() == p1)
-    r_before = t.rect(p1)
-    h.keys("ctrl+b", "shift+j", wait=0.7)
-    t.check("Prefix Umschalt+J tauscht Bereiche", t.rect(p1) != r_before, f"{r_before} -> {t.rect(p1)}")
-    h.keys("ctrl+b", "shift+k", wait=0.7)
-    before = t.focused_pane(); h.keys("ctrl+b", "tab")
-    t.check("Prefix Tab nächster Bereich", t.focused_pane() != before)
 
     # ── Tabs ────────────────────────────────────────────────────────────────
     tab1 = t.focused_tab()
-    h.keys("alt++", wait=0.6); h.type("zwei\n"); time.sleep(0.6)
-    t.check("Alt++ neuer Tab", len(t.tabs()) == 2, str([x["label"] for x in t.tabs()]))
+    h.keys("ctrl+b", "c", wait=0.6); h.type("zwei\n"); time.sleep(0.6)
+    t.check("Prefix C neuer Tab", len(t.tabs()) == 2)
     tab2 = t.focused_tab()
-    h.keys("ctrl+b", "c", wait=0.6); h.type("drei\n"); time.sleep(0.6)
-    t.check("Prefix C neuer Tab", len(t.tabs()) == 3)
-    tab3 = t.focused_tab()
     h.keys("alt+1"); t.check("Alt+1 Tab 1", t.focused_tab() == tab1)
-    h.keys("alt+3"); t.check("Alt+3 Tab 3", t.focused_tab() == tab3)
-    h.keys("alt+shift+h"); t.check("Alt+Umschalt+H Tab zurück", t.focused_tab() == tab2)
-    h.keys("alt+shift+l"); t.check("Alt+Umschalt+L Tab vor", t.focused_tab() == tab3)
-    h.keys("alt+shift+left"); t.check("Alt+Umschalt+← Tab zurück", t.focused_tab() == tab2)
-    h.keys("alt+shift+right"); t.check("Alt+Umschalt+→ Tab vor", t.focused_tab() == tab3)
-    h.keys("ctrl+b", "p"); t.check("Prefix P Tab zurück", t.focused_tab() == tab2)
-    h.keys("ctrl+b", "ctrl+n"); t.check("Prefix Strg+N Tab vor", t.focused_tab() == tab3)
-    h.keys("ctrl+b", "2"); t.check("Prefix 2 Tab 2", t.focused_tab() == tab2)
-    order = [x["tab_id"] for x in t.tabs()]
-    h.keys("ctrl+b", "<", wait=0.6)
-    t.check("Prefix < schiebt Tab nach vorn", [x["tab_id"] for x in t.tabs()] == [tab2, tab1, tab3], str([x["tab_id"] for x in t.tabs()]))
-    h.keys("ctrl+b", "shift+<", wait=0.6)
-    t.check("Prefix > schiebt Tab nach hinten", [x["tab_id"] for x in t.tabs()] == order)
+    h.keys("alt+2"); t.check("Alt+2 Tab 2", t.focused_tab() == tab2)
+    h.keys("ctrl+b", "1"); t.check("Prefix 1 Tab 1", t.focused_tab() == tab1)
 
-    # ── Agenten (zwei Bereiche als Agenten melden) ──────────────────────────
-    h.keys("alt+1")
-    for pane in (p0, p2):
-        t.api("pane", "report-agent", pane, "--source", "keytest", "--agent", "claude", "--state", "idle")
-    time.sleep(0.6)
-    h.keys("alt+h"); h.keys("alt+h")
-    start = t.focused_pane()
-    h.keys("alt+ä", wait=0.6); a1 = t.focused_pane()
-    h.keys("alt+ä", wait=0.6); a2 = t.focused_pane()
-    t.check("Alt+Ä nächster Agent", {a1, a2} == {p0, p2}, f"start={start} a1={a1} a2={a2}")
-    h.keys("alt+shift+ä", wait=0.6)
-    t.check("Alt+Umschalt+Ä vorheriger Agent", t.focused_pane() == a1)
-    h.keys("ctrl+b", "ä", wait=0.6); t.check("Prefix Ä nächster Agent", t.focused_pane() == a2)
-    h.keys("ctrl+b", "shift+ä", wait=0.6); t.check("Prefix Umschalt+Ä vorheriger Agent", t.focused_pane() == a1)
-    h.keys("ctrl+b", "alt+2", wait=0.6); second = t.focused_pane()
-    h.keys("ctrl+b", "alt+1", wait=0.6); first = t.focused_pane()
-    t.check("Prefix Alt+1 / Alt+2 Agent nach Nummer", {first, second} == {p0, p2} and first != second, f"{first} {second}")
-
-    # ── Workspaces ──────────────────────────────────────────────────────────
-    ws1 = t.focused_ws()
-    h.keys("ctrl+b", "shift+n", wait=1.2)
-    t.check("Prefix Umschalt+N neuer Workspace", len(t.ws()) == 2)
-    ws2 = t.focused_ws()
-    h.keys("alt+shift+k", wait=0.6); t.check("Alt+Umschalt+K Workspace hoch", t.focused_ws() == ws1)
-    h.keys("alt+shift+j", wait=0.6); t.check("Alt+Umschalt+J Workspace runter", t.focused_ws() == ws2)
-    h.keys("alt+shift+up", wait=0.6); t.check("Alt+Umschalt+↑ Workspace hoch", t.focused_ws() == ws1)
-    h.keys("alt+shift+down", wait=0.6); t.check("Alt+Umschalt+↓ Workspace runter", t.focused_ws() == ws2)
-    h.keys("ctrl+b", ",", wait=0.6); t.check("Prefix , vorheriger Workspace", t.focused_ws() == ws1)
-    h.keys("ctrl+b", ".", wait=0.6); t.check("Prefix . nächster Workspace", t.focused_ws() == ws2)
-    h.keys("ctrl+b", "shift+1", wait=0.6); t.check("Prefix Umschalt+1 Workspace 1", t.focused_ws() == ws1)
-
-    # ── Modi und Überblendungen ─────────────────────────────────────────────
-    h.take(); h.key("alt+w")
-    t.check("Alt+W Navigate-Modus", "NAVIGATE" in h.text_since())
-    h.keys("esc")
-    h.take(); h.keys("ctrl+b", "w", wait=0.1)
-    t.check("Prefix W Navigate-Modus", "NAVIGATE" in h.text_since())
-    before = t.focused_pane(); h.keys("l", "h", "l")
-    t.check("Navigate: H/L ohne Prefix, Modus bleibt offen", t.focused_pane() != before or len(t.panes()) > 1)
-    h.keys("esc")
+    # ── Gehe zu, Hilfe, Verlauf ─────────────────────────────────────────────
     h.take(); h.key("alt+g"); txt = h.text_since(0.7)
     t.check("Alt+G Gehe-zu-Auswahl", re.search(r"(?i)go ?to|search|filter", txt) is not None, txt[-200:].replace("\n", " "))
-    h.keys("esc")
-    h.take(); h.keys("ctrl+b", "ß", wait=0.1); txt = h.text_since(0.7)
-    t.check("Prefix ß Hilfe", re.search(r"(?i)keybind|help", txt) is not None)
-    h.take(); h.keys("/"); h.type("lv"); txt = h.text_since(0.7)
-    t.check("Hilfe nennt den eigenen Befehl mit Beschreibung", "Dateien (lv)" in txt, re.sub(r"\s+", " ", txt)[-300:])
-    h.keys("esc")
     h.keys("esc")
     h.take(); h.keys("ctrl+b", "shift+ß", wait=0.1); txt = h.text_since(0.7)
     t.check("Prefix ? Hilfe", re.search(r"(?i)keybind|help", txt) is not None)
     h.keys("esc")
-    h.take(); h.key("ctrl+b")
-    t.check("Strg+B zeigt PREFIX", "PREFIX" in h.text_since())
-    h.keys("esc")
-
-    # ── Verlauf ─────────────────────────────────────────────────────────────
-    h.keys("alt+e", wait=1.5)
-    t.check("Alt+E öffnet die Ausgabe im Editor", os.path.exists(t.marker))
+    h.keys("ctrl+b", "e", wait=1.5)
+    t.check("Prefix E öffnet die Ausgabe im Editor", os.path.exists(t.marker))
     h.keys("enter", wait=0.5)
 
-    # ── Popups ──────────────────────────────────────────────────────────────
-    proof = os.path.join(t.root, "popup-pwd")
-    h.keys("alt+s", wait=1.8)
-    h.type(f" pwd > '{proof}'; exit\n"); time.sleep(1.2)
-    got = open(proof).read().strip() if os.path.exists(proof) else ""
-    t.check("Alt+S Shell-Popup im Ordner des Bereichs", got == t.work, got)
+    # ── lv-Popup ────────────────────────────────────────────────────────────
     h.take(); h.keys("alt+ö", wait=2.5); txt = h.text_since(0.5)
     t.check("Alt+Ö öffnet lv als Popup", "Hilfe" in txt or "öffnen" in txt, txt[-160:].replace("\n", " "))
     before = t.focused_pane()
     h.keys("alt+l", wait=0.5)
-    t.check("Im Popup greifen herdr-Tasten nicht (Alt+L bleibt bei lv)", t.focused_pane() == before)
+    t.check("Im Popup greifen herdr-Tasten nicht", t.focused_pane() == before)
     h.keys("esc", wait=1.2)
-    h.take(); h.keys("ctrl+b", "f", wait=2.5); txt = h.text_since(0.5)
-    t.check("Prefix F öffnet lv als Popup", "Hilfe" in txt or "öffnen" in txt)
-    # im Popup in einen Unterordner gehen, Esc: der aufrufende Bereich wechselt mit
-    sub = os.path.join(t.work, "unter ordner")
-    os.makedirs(sub, exist_ok=True)
-    origin = t.focused_pane()
-    h.keys("ctrl+r", wait=0.8)
-    h.type("unter"); time.sleep(0.6)
-    h.keys("enter", wait=1.0)
-    h.keys("esc", wait=2.0)
-    cwd = t.api("pane", "get", origin).get("pane", {}).get("foreground_cwd")
-    t.check("lv-Popup: Esc wechselt den aufrufenden Bereich in den letzten Ordner", cwd == sub, str(cwd))
 
-    # ── Durchgereichte Tasten: bleiben beim Programm ────────────────────────
+    # ── Alles andere geht ans Programm ──────────────────────────────────────
     target = t.focused_pane()
     h.type(" command cat -v\n"); time.sleep(0.8)
-    for spec in ("alt+b", "alt+f", "alt+d", "alt+y", "alt+.", "alt+p", "alt+t", "alt+o", "alt+c",
-                 "alt+shift+ö", "alt+m", "alt+n", "alt+i", "alt+u", "alt+x", "alt+q"):
-        h.key(spec)
+    passthrough = "abcdefimnopqrstuwxy."
+    for ch in passthrough:
+        h.key(f"alt+{ch}")
+    h.key("alt+left"); h.key("alt+right")
     h.keys("enter", wait=0.6)
     seen = t.pane_text(target)
     line = next((l for l in seen.splitlines()[::-1] if "^[" in l), "")
-    for ch in "bfdy.ptocmniuxq":
+    for ch in passthrough:
         t.check(f"Alt+{ch.upper()} geht ans Programm", f"^[{ch}" in line, line[-120:])
-    t.check("Alt+Umschalt+Ö geht ans Programm (Bash: lv im Git-Wurzelordner)", "^[M-CM-^V" in line, line[-120:])
-    h.take()
-    os.write(h.fd, b"\x1b[98;5u"); time.sleep(0.15); os.write(h.fd, b"\x1b[98;5u"); time.sleep(0.5)
-    h.keys("enter", wait=0.5)
-    t.check("Strg+B zweimal = Strg+B ans Programm", "^B" in t.pane_text(target))
+    t.check("Alt+←/→ gehen ans Programm (wortweise springen)", line.count("^[") > len(passthrough), line[-120:])
     h.keys("ctrl+c", wait=0.4)
-    # Alt+Rück: ohne Zeilenmodus, sonst schluckt das Terminal die Rücktaste selbst
     h.type(" stty -icanon; command cat -v; stty sane\n"); time.sleep(0.8)
-    h.keys("alt+backspace", wait=0.6)
+    for spec in ("ctrl+e", "ctrl+r", "ctrl+o", "ctrl+w"):
+        h.key(spec)
+    h.keys("enter", wait=0.6)
     seen = t.pane_text(target)
-    t.check("Alt+Rück geht ans Programm", "^[^?" in seen or "^[^H" in seen, seen[-80:].replace("\n", " "))
+    t.check("Strg+E/R/O/W gehen ans Programm", all(x in seen for x in ("^E", "^R", "^O", "^W")), seen[-80:].replace("\n", " "))
     h.keys("ctrl+c", wait=0.5)
 
     # ── Schließen nur über den Prefix ───────────────────────────────────────
     n = len(t.panes())
-    h.keys("alt+x", wait=0.5)
-    t.check("Alt+X schließt NICHT", len(t.panes()) == n)
-    h.keys("ctrl+c", wait=0.3)
     h.keys("ctrl+b", "x", wait=0.9)
     t.check("Prefix X schließt den Bereich", len(t.panes()) == n - 1, f"{n} -> {len(t.panes())}")
 
